@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Washington State Weather Alerts</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f4f7fb;
+      color: #1f2937;
+    }
+
+    .header {
+      background: #0b3d91;
+      color: white;
+      padding: 14px 18px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .header p {
+      margin: 4px 0 0;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .summary {
+      background: white;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .alert {
+      background: white;
+      border-left: 6px solid #dc2626;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .alert.watch {
+      border-left-color: #d97706;
+    }
+
+    .alert.advisory {
+      border-left-color: #2563eb;
+    }
+
+    .alert.statement {
+      border-left-color: #6b7280;
+    }
+
+    .alert h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      color: #111827;
+    }
+
+    .meta {
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #4b5563;
+    }
+
+    .description {
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .loading,
+    .error,
+    .no-alerts {
+      background: white;
+      padding: 16px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .updated {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 8px;
+    }
+
+    .footer {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    a {
+      color: #0b3d91;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Washington State Weather Alerts</h1>
+    <p>National Weather Service Active Alerts</p>
+  </div>
+
+  <div id="content">
+    <div class="loading">Loading active alerts...</div>
+  </div>
+
+  <div class="footer">
+    Data provided by the National Weather Service API
+  </div>
+
+  <script>
+    const endpoint = "https://api.weather.gov/alerts/active?area=WA";
+
+    async function loadAlerts() {
+      const content = document.getElementById("content");
+
+      try {
+        const response = await fetch(endpoint, {
+          headers: {
+            "Accept": "application/geo+json"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to retrieve alerts.");
+        }
+
+        const data = await response.json();
+        const alerts = data.features || [];
+
+        if (alerts.length === 0) {
+          content.innerHTML = `
+            <div class="no-alerts">
+              <h2>No active weather alerts for Washington State.</h2>
+            </div>
+          `;
+          return;
+        }
+
+        // Sort by severity
+        const severityOrder = {
+          "Extreme": 1,
+          "Severe": 2,
+          "Moderate": 3,
+          "Minor": 4,
+          "Unknown": 5
+        };
+
+        alerts.sort((a, b) => {
+          const sa = severityOrder[a.properties.severity] || 99;
+          const sb = severityOrder[b.properties.severity] || 99;
+          return sa - sb;
+        });
+
+        const summaryHtml = `
+          <div class="summary">
+            <strong>${alerts.length}</strong> active weather alert(s) in Washington State.
+            <div class="updated">
+              Last updated: ${new Date().toLocaleString()}
+            </div>
+          </div>
+        `;
+
+        const alertsHtml = alerts.map(alert => {
+          const props = alert.properties;
+
+          let cssClass = "";
+
+          const eventText = (props.event || "").toLowerCase();
+
+          if (eventText.includes("watch")) {
+            cssClass = "watch";
+          } else if (eventText.includes("advisory")) {
+            cssClass = "advisory";
+          } else if (eventText.includes("statement")) {
+            cssClass = "statement";
+          }
+
+          const areas = props.areaDesc || "Unknown area";
+          const severity = props.severity || "Unknown";
+          const urgency = props.urgency || "Unknown";
+          const certainty = props.certainty || "Unknown";
+
+          const effective = props.effective
+            ? new Date(props.effective).toLocaleString()
+            : "N/A";
+
+          const expires = props.expires
+            ? new Date(props.expires).toLocaleString()
+            : "N/A";
+
+          const description = props.description || "No description available.";
+
+          return `
+            <div class="alert ${cssClass}">
+              <h2>${props.event}</h2>
+
+              <div class="meta">
+                <strong>Areas:</strong> ${areas}<br>
+                <strong>Severity:</strong> ${severity}<br>
+                <strong>Urgency:</strong> ${urgency}<br>
+                <strong>Certainty:</strong> ${certainty}<br>
+                <strong>Effective:</strong> ${effective}<br>
+                <strong>Expires:</strong> ${expires}
+              </div>
+
+              <div class="description">
+                ${description}
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        content.innerHTML = summaryHtml + alertsHtml;
+
+      } catch (error) {
+        console.error(error);
+
+        document.getElementById("content").innerHTML = `
+          <div class="error">
+            <h2>Error Loading Alerts</h2>
+            <p>${error.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    loadAlerts();
+
+    // Refresh every 5 minutes
+    setInterval(loadAlerts, 300000);
+  </script>
+
+</body>
+</html>
