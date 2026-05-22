@@ -1,0 +1,38 @@
+<div id="nws-alerts">Loading weather alerts...</div>
+
+<script>
+fetch("https://api.weather.gov/alerts/active?area=WA")
+  .then(response => response.json())
+  .then(data => {
+
+    const alerts = data.features;
+
+    if (!alerts || alerts.length === 0) {
+      document.getElementById("nws-alerts").innerHTML =
+        "<p>No active weather alerts for Washington.</p>";
+      return;
+    }
+
+    let html = "<ul>";
+
+    alerts.forEach(alert => {
+      const p = alert.properties;
+
+      html += `
+        <li>
+          <strong>${p.event}</strong>
+          (${p.areaDesc})
+        </li>
+      `;
+    });
+
+    html += "</ul>";
+
+    document.getElementById("nws-alerts").innerHTML = html;
+  })
+  .catch(error => {
+    document.getElementById("nws-alerts").innerHTML =
+      "Unable to load alerts.";
+    console.error(error);
+  });
+</script>
